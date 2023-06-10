@@ -12,31 +12,32 @@ use substreams::log;
 use substreams::{errors::Error, Hex};
 use substreams_ethereum::pb::eth::v2::{self as eth};
 
-pub struct ContractCreation<'a> {
-    address: String,
-    block_number: u64,
-    code: &'a Vec<u8>,
-    storage_changes: HashMap<H256, &'a Vec<u8>>,
+pub struct ContractCreation {
+    address: Vec<u8>,
+    code: Vec<u8>,
+    storage_changes: HashMap<H256, Vec<u8>>,
 }
 
 #[substreams::handlers::map]
 pub fn map_blocks(params: String, blk: eth::Block) -> Result<Contracts, Error> {
     log::info!("map_blocks: {}", params);
     let contracts = blk
-        .transactions()
+        .transaction_traces
+        .into_iter()
+        .filter(|tx| tx.status == 1)
         .flat_map(|tx| {
             tx.calls
-                .iter()
+                .into_iter()
                 .filter(|call| !call.state_reverted)
                 .filter(|call| call.call_type == eth::CallType::Create as i32)
                 .map(|call| ContractCreation {
-                    address: format!("0x{}", Hex(&call.address)),
-                    block_number: blk.number,
-                    code: &call.code_changes.iter().last().unwrap().new_code,
+                    address: call.address,
+                    // Better deal with code_changes being a list, last is good for now
+                    code: call.code_changes.into_iter().last().unwrap().new_code,
                     storage_changes: call
                         .storage_changes
-                        .iter()
-                        .map(|s| (H256::from_slice(s.key.as_ref()), &s.new_value))
+                        .into_iter()
+                        .map(|s| (H256::from_slice(s.key.as_ref()), s.new_value))
                         .collect(),
                 })
         })
@@ -49,12 +50,14 @@ pub fn map_blocks(params: String, blk: eth::Block) -> Result<Contracts, Error> {
 
 fn process_contract(contract_creation: ContractCreation) -> Option<Contract> {
     let mut contract = Contract::default();
-    let code = Rc::new(contract_creation.code.clone());
+    let code = Rc::new(contract_creation.code);
+
     // Name
     match execute_on(
-        &contract_creation,
+        &contract_creation.address,
         code.clone(),
         abi::erc20::functions::Name {}.encode(),
+        &contract_creation.storage_changes,
     ) {
         Ok(return_value) => match abi::erc20::functions::Name::output(return_value.as_ref()) {
             Ok(x) => {
@@ -71,9 +74,10 @@ fn process_contract(contract_creation: ContractCreation) -> Option<Contract> {
 
     // Symbol
     match execute_on(
-        &contract_creation,
+        &contract_creation.address,
         code.clone(),
         abi::erc20::functions::Symbol {}.encode(),
+        &contract_creation.storage_changes,
     ) {
         Ok(return_value) => match abi::erc20::functions::Symbol::output(return_value.as_ref()) {
             Ok(x) => {
@@ -90,9 +94,10 @@ fn process_contract(contract_creation: ContractCreation) -> Option<Contract> {
 
     // Decimals
     match execute_on(
-        &contract_creation,
+        &contract_creation.address,
         code.clone(),
         abi::erc20::functions::Decimals {}.encode(),
+        &contract_creation.storage_changes,
     ) {
         Ok(return_value) => match abi::erc20::functions::Decimals::output(return_value.as_ref()) {
             Ok(x) => {
@@ -111,11 +116,12 @@ fn process_contract(contract_creation: ContractCreation) -> Option<Contract> {
 }
 
 fn execute_on(
-    contract: &ContractCreation,
+    address: &Vec<u8>,
     code: Rc<Vec<u8>>,
     data: Vec<u8>,
+    storage_changes: &HashMap<H256, Vec<u8>>,
 ) -> Result<Vec<u8>, anyhow::Error> {
-    let valids = evm_core::Valids::new(contract.code);
+    let valids = evm_core::Valids::new(&code);
     let mut jump_dest = 0;
     for i in 0..valids.len() {
         if valids.is_valid(i) {
@@ -124,11 +130,10 @@ fn execute_on(
     }
 
     log::info!(
-        "Trying contract: {:?} at block {} with {} valid jump destinations (code len {}))",
-        contract.address,
-        contract.block_number,
+        "Trying contract: {:?} with {} valid jump destinations (code len {}))",
+        Hex(address),
         jump_dest,
-        contract.code.len(),
+        code.len(),
     );
 
     let mut machine = evm_core::Machine::new(
@@ -192,7 +197,7 @@ fn execute_on(
                             0x54 => {
                                 let key = machine.stack_mut().pop().unwrap();
 
-                                if let Some(value) = contract.storage_changes.get(&key) {
+                                if let Some(value) = storage_changes.get(&key) {
                                     machine.stack_mut().push(H256::from_slice(value)).unwrap();
                                 } else {
                                     return Err(anyhow::anyhow!(
