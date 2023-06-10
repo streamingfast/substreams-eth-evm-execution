@@ -1,0 +1,28 @@
+[package]
+name = "substreams-eth-evm-execution"
+version = "0.0.1"
+edition = "2021"
+
+[lib]
+name = "substreams"
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = "1"
+ethabi = "17"
+evm-core = "0.39"
+num-bigint = "0.4"
+primitive-types = "0.12"
+prost = "0.11"
+prost-types = "0.11"
+substreams = "0.5"
+substreams-ethereum = "0.9"
+
+[build-dependencies]
+anyhow = "1"
+substreams-ethereum = "0.9"
+
+[profile.release]
+lto = true
+opt-level = 's'
+strip = "debuginfo"

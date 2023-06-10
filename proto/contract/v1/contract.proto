@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package contract.v1;
+
+message Contracts {
+  repeated Contract contracts = 1;
+}
+
+message Contract {
+  string name = 1;
+  string symbol = 2;
+  uint64 decimals = 3;
+}

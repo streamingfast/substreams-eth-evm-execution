@@ -1,0 +1,24 @@
+specVersion: v0.1.0
+package:
+  name: "substreams_eth_evm_execution"
+  version: v0.0.1
+
+protobuf:
+  files:
+    - contract/v1/contract.proto
+  importPaths:
+    - ./proto
+
+binaries:
+  default:
+    type: wasm/rust-v1
+    file: ./target/wasm32-unknown-unknown/release/substreams.wasm
+
+modules:
+  - name: map_blocks
+    kind: map
+    inputs:
+      - params: string
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:contract.v1.Contracts
