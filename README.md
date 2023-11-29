@@ -1,8 +1,8 @@
 ## Substreams Ethereum EVM Execution
 
-This repository show cases embedding an EVM (https://github.com/rust-ethereum/evm) directly inside a Substreams WASM package to execute some "call" directly against the contract's byte code and the block's storage changes.
+This repository show cases embedding an EVM (https://github.com/rust-ethereum/evm) directly inside a Substreams WASM package to execute some "calls" directly against the contract's byte code and the block's storage changes.
 
-The experiment conducted in this repository is to extracts `name()`, `symbol()` and `decimals()` straight at contract creation without having to rely on RPC calls to gather the information.
+The experiment conducted in this repository is to extract `name()`, `symbol()` and `decimals()` straight at contract creation without having to rely on RPC calls to gather the information.
 
 In a nutshell, we extract all contract creations from the block. From the contract's creation call, we extract all the storage changes.
 
@@ -38,6 +38,6 @@ map_blocks: log: EVM returned gracefully 000000000000000000000000000000000000000
 
 ### Caveats
 
-For now we accumulate only the storage changes on the contract's creation call, we could actually use the full transaction storage changes. We could even think about getting all storage changes for the block for those contract(s), however for block, I'm wondering if it's just too much. To reduce memory constraints, we could use references to storage bytes so that should be manageable.
+For now, we accumulate only the storage changes on the contract's creation call. We could actually use the full transaction storage changes. We could even think about getting all storage changes for the block for those contract(s). However for blocks, it might be too much. To reduce memory constraints, we could use references to storage bytes so that should be manageable.
 
-Proxy contracts initialized across multiple block is not gonna work with this method for now. One workaround would be to track the "initialize" method (I imagine multiple names could be used as the initialize method) and then do the same idea again.
+Proxy contracts initialized across multiple blocks is not going to work with this method for now. One workaround would be to track the "initialize" method (I imagine multiple names could be used as the initialize method) and then do the same idea again.
